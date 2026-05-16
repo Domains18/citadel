@@ -16,8 +16,17 @@ type DeployConfig struct {
 	Environments map[string]EnvConfig   `yaml:"environments"`
 	Secrets      []string               `yaml:"secrets"`
 	Queues       *QueuesConfig          `yaml:"queues,omitempty"`
+	ECS          *ECSConfig             `yaml:"ecs,omitempty"`
 	VPC          *VPCConfig             `yaml:"vpc,omitempty"`
 	CloudFront   *CloudFrontConfig      `yaml:"cloudfront,omitempty"`
+}
+
+// ECSConfig overrides how Citadel locates an existing ECS service. When unset,
+// Citadel falls back to the "<name>-cluster" / "<name>-service" convention.
+// Useful for projects whose ECS resources were not created by Citadel.
+type ECSConfig struct {
+	Cluster string `yaml:"cluster,omitempty"`
+	Service string `yaml:"service,omitempty"`
 }
 
 // QueuesConfig declares the SQS queues a service may access, split by intent.
