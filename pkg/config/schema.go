@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,8 +15,17 @@ type DeployConfig struct {
 	Container    ContainerConfig        `yaml:"container"`
 	Environments map[string]EnvConfig   `yaml:"environments"`
 	Secrets      []string               `yaml:"secrets"`
+	Queues       *QueuesConfig          `yaml:"queues,omitempty"`
 	VPC          *VPCConfig             `yaml:"vpc,omitempty"`
 	CloudFront   *CloudFrontConfig      `yaml:"cloudfront,omitempty"`
+}
+
+// QueuesConfig declares the SQS queues a service may access, split by intent.
+// Consume queues receive read/delete permissions; produce queues receive send
+// permissions. A queue ARN may appear in both lists.
+type QueuesConfig struct {
+	Consume []string `yaml:"consume,omitempty"`
+	Produce []string `yaml:"produce,omitempty"`
 }
 
 // ContainerConfig defines container runtime settings
@@ -89,7 +99,42 @@ func (c *DeployConfig) Validate() error {
 	if len(c.Secrets) == 0 {
 		return fmt.Errorf("at least one secret is required")
 	}
+	if err := c.validateQueues(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateQueues checks that every queue ARN under queues: is a well-formed
+// SQS ARN. An absent queues: block is valid.
+func (c *DeployConfig) validateQueues() error {
+	if c.Queues == nil {
+		return nil
+	}
+	for i, arn := range c.Queues.Consume {
+		if !isValidSQSARN(arn) {
+			return fmt.Errorf("queues.consume[%d]: %q is not a valid SQS ARN", i, arn)
+		}
+	}
+	for i, arn := range c.Queues.Produce {
+		if !isValidSQSARN(arn) {
+			return fmt.Errorf("queues.produce[%d]: %q is not a valid SQS ARN", i, arn)
+		}
+	}
+	return nil
+}
+
+// isValidSQSARN reports whether s has the shape
+// arn:aws:sqs:<region>:<account-id>:<queue-name> with all six segments present.
+func isValidSQSARN(s string) bool {
+	parts := strings.Split(s, ":")
+	if len(parts) != 6 {
+		return false
+	}
+	if parts[0] != "arn" || parts[1] != "aws" || parts[2] != "sqs" {
+		return false
+	}
+	return parts[3] != "" && parts[4] != "" && parts[5] != ""
 }
 
 // GetEnv returns the config for a specific environment

@@ -174,6 +174,34 @@ func buildIAMRoles(stack awscdk.Stack, cfg *config.DeployConfig) (awsiam.Role, a
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
 	})
 
+	// Grant SQS access to declared queues (Task 2 will split by intent)
+	if cfg.Queues != nil && (len(cfg.Queues.Consume)+len(cfg.Queues.Produce)) > 0 {
+		seen := make(map[string]bool)
+		var queueArns []*string
+		for _, arn := range cfg.Queues.Consume {
+			if !seen[arn] {
+				seen[arn] = true
+				queueArns = append(queueArns, jsii.String(arn))
+			}
+		}
+		for _, arn := range cfg.Queues.Produce {
+			if !seen[arn] {
+				seen[arn] = true
+				queueArns = append(queueArns, jsii.String(arn))
+			}
+		}
+		taskRole.AddToPolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+			Actions: jsii.Strings(
+				"sqs:ReceiveMessage",
+				"sqs:DeleteMessage",
+				"sqs:SendMessage",
+				"sqs:GetQueueAttributes",
+				"sqs:ChangeMessageVisibility",
+			),
+			Resources: &queueArns,
+		}))
+	}
+
 	return executionRole, taskRole
 }
 
