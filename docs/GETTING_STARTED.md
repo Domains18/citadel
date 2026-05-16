@@ -39,6 +39,22 @@ secrets:
   - JWT_SECRET
 ```
 
+### Granting SQS access
+
+If your service uses Amazon SQS, declare the queue ARNs under `queues:` so
+Citadel grants the task role permission to use them:
+
+```yaml
+queues:
+  consume:
+    - arn:aws:sqs:us-east-1:123456789012:incoming
+  produce:
+    - arn:aws:sqs:us-east-1:123456789012:outgoing
+```
+
+`consume` queues get read/delete permissions; `produce` queues get send
+permissions. The queues must already exist — Citadel does not create them.
+
 ### 3. Create `.env`
 
 ```bash

@@ -55,6 +55,28 @@ citadel deploy --env dev --deploy-infra
 - [ ] ECS deployment
 - [ ] CDK construct library
 
+## Configuration
+
+### `queues:` — SQS access (optional)
+
+Grants the ECS task role least-privilege access to existing SQS queues.
+Queues are split by intent:
+
+```yaml
+queues:
+  consume:
+    - arn:aws:sqs:us-east-1:123456789012:incoming
+  produce:
+    - arn:aws:sqs:us-east-1:123456789012:outgoing
+```
+
+- `consume` queues are granted `sqs:ReceiveMessage`, `sqs:DeleteMessage`,
+  `sqs:GetQueueAttributes`, and `sqs:ChangeMessageVisibility`.
+- `produce` queues are granted `sqs:SendMessage` and `sqs:GetQueueAttributes`.
+
+A queue ARN may appear in both lists if the service both reads and writes it.
+Citadel does not create the queues — they must already exist.
+
 ## License
 
 MIT

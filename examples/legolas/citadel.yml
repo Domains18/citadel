@@ -50,6 +50,12 @@ secrets:
   - INCOMING_MESSAGE_QUEUE_URL
   - OUTGOING_MESSAGE_QUEUE_URL
 
+queues:
+  consume:
+    - arn:aws:sqs:us-east-1:454066810976:legolas-incoming-messages
+  produce:
+    - arn:aws:sqs:us-east-1:454066810976:legolas-outgoing-messages
+
 vpc:
   max_azs: 2
 
