@@ -45,6 +45,41 @@ make install
 citadel deploy --env dev --deploy-infra
 ```
 
+## citadel-logs daemon
+
+Citadel ships a separate always-on binary, `citadel-logs`, that watches
+CloudWatch log groups for every registered clusterbox service and surfaces
+500-class errors at <http://localhost:5500/logs>.
+
+It works across runtimes:
+
+- `runtime: ecs` (default) — clusterbox NestJS backends like Aragorn / gollum.
+- `runtime: lambda` — clusterbox Go Lambdas like smaug. Requires a
+  `lambda: { functionName: ... }` block.
+
+### Run it
+
+```bash
+# 1. Build the Docker image
+make docker-logs
+
+# 2. Register a repo
+cd ~/Documents/github/clusterbox/backend/Aragorn
+citadel logs-daemon register --env dev
+
+# 3. Start the daemon
+docker compose -f docker-compose.logs.yml up -d
+
+# 4. Open the dashboard
+open http://localhost:5500/logs
+```
+
+The daemon polls each service's CloudWatch log group every 10s, persists
+500-class events to SQLite (`/data/citadel-logs.db`), retains them for 7 days,
+and hot-reloads the registry on change. See
+[`docs/superpowers/specs/2026-06-09-citadel-logs-daemon-design.md`](docs/superpowers/specs/2026-06-09-citadel-logs-daemon-design.md)
+for the full design.
+
 ## Roadmap
 
 - [x] Project architecture

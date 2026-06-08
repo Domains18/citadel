@@ -240,6 +240,7 @@ Single source of truth: citadel.yml defines everything about your deployment.`,
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(newLogsDaemonCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

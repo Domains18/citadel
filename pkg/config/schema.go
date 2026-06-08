@@ -8,17 +8,44 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Runtime identifies which AWS compute primitive a service runs on. The
+// citadel deploy CLI only handles RuntimeECS; RuntimeLambda exists so the
+// citadel-logs daemon can ingest logs from Lambda-backed services like smaug
+// using the same citadel.yml registry mechanism.
+type Runtime string
+
+const (
+	RuntimeECS    Runtime = "ecs"
+	RuntimeLambda Runtime = "lambda"
+)
+
 // DeployConfig represents the citadel.yml schema
 type DeployConfig struct {
-	Name         string                 `yaml:"name"`
-	Region       string                 `yaml:"region"`
-	Container    ContainerConfig        `yaml:"container"`
-	Environments map[string]EnvConfig   `yaml:"environments"`
-	Secrets      []string               `yaml:"secrets"`
-	Queues       *QueuesConfig          `yaml:"queues,omitempty"`
-	ECS          *ECSConfig             `yaml:"ecs,omitempty"`
-	VPC          *VPCConfig             `yaml:"vpc,omitempty"`
-	CloudFront   *CloudFrontConfig      `yaml:"cloudfront,omitempty"`
+	Name         string               `yaml:"name"`
+	Region       string               `yaml:"region"`
+	Runtime      Runtime              `yaml:"runtime,omitempty"`
+	Lambda       *LambdaConfig        `yaml:"lambda,omitempty"`
+	Container    ContainerConfig      `yaml:"container"`
+	Environments map[string]EnvConfig `yaml:"environments"`
+	Secrets      []string             `yaml:"secrets"`
+	Queues       *QueuesConfig        `yaml:"queues,omitempty"`
+	ECS          *ECSConfig           `yaml:"ecs,omitempty"`
+	VPC          *VPCConfig           `yaml:"vpc,omitempty"`
+	CloudFront   *CloudFrontConfig    `yaml:"cloudfront,omitempty"`
+}
+
+// LambdaConfig declares Lambda-specific metadata used by the logs daemon.
+// Required when runtime: lambda.
+type LambdaConfig struct {
+	FunctionName string `yaml:"functionName"`
+}
+
+// ResolvedRuntime returns the runtime with the implicit default (ecs) applied.
+func (c *DeployConfig) ResolvedRuntime() Runtime {
+	if c.Runtime == "" {
+		return RuntimeECS
+	}
+	return c.Runtime
 }
 
 // ECSConfig overrides how Citadel locates an existing ECS service. When unset,
@@ -85,7 +112,9 @@ func Load(path string) (*DeployConfig, error) {
 	return &cfg, nil
 }
 
-// Validate checks if the config is valid
+// Validate checks if the config is valid for the citadel deploy pipeline.
+// Lambda-runtime configs skip ECS-only field requirements but still must
+// declare a function name.
 func (c *DeployConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("name is required")
@@ -93,20 +122,29 @@ func (c *DeployConfig) Validate() error {
 	if c.Region == "" {
 		return fmt.Errorf("region is required")
 	}
-	if c.Container.Port == 0 {
-		return fmt.Errorf("container.port is required")
-	}
-	if c.Container.CPU == 0 {
-		return fmt.Errorf("container.cpu is required")
-	}
-	if c.Container.Memory == 0 {
-		return fmt.Errorf("container.memory is required")
-	}
-	if len(c.Environments) == 0 {
-		return fmt.Errorf("at least one environment is required")
-	}
-	if len(c.Secrets) == 0 {
-		return fmt.Errorf("at least one secret is required")
+	switch c.ResolvedRuntime() {
+	case RuntimeECS:
+		if c.Container.Port == 0 {
+			return fmt.Errorf("container.port is required")
+		}
+		if c.Container.CPU == 0 {
+			return fmt.Errorf("container.cpu is required")
+		}
+		if c.Container.Memory == 0 {
+			return fmt.Errorf("container.memory is required")
+		}
+		if len(c.Environments) == 0 {
+			return fmt.Errorf("at least one environment is required")
+		}
+		if len(c.Secrets) == 0 {
+			return fmt.Errorf("at least one secret is required")
+		}
+	case RuntimeLambda:
+		if c.Lambda == nil || c.Lambda.FunctionName == "" {
+			return fmt.Errorf("lambda.functionName is required when runtime: lambda")
+		}
+	default:
+		return fmt.Errorf("runtime %q: must be %q or %q", c.Runtime, RuntimeECS, RuntimeLambda)
 	}
 	if err := c.validateQueues(); err != nil {
 		return err
