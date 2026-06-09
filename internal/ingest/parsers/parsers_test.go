@@ -83,6 +83,21 @@ func TestGoLambda_IgnoresStartEnd(t *testing.T) {
 	}
 }
 
+func TestGoLambda_REPORTWith5xxExtractsRequestID(t *testing.T) {
+	p := GoLambda{}
+	line := `REPORT RequestId: abc-123-def Duration: 12.5 ms Billed Duration: 13 ms Status: 502`
+	got, ok := p.Parse(ev(line, "s", "e", 9))
+	if !ok {
+		t.Fatal("expected to flag 5xx REPORT")
+	}
+	if got.RequestID != "abc-123-def" {
+		t.Fatalf("expected requestId 'abc-123-def', got %q", got.RequestID)
+	}
+	if got.Status != 502 {
+		t.Fatalf("expected status 502, got %d", got.Status)
+	}
+}
+
 func TestGoLambda_FlagsPanic(t *testing.T) {
 	p := GoLambda{}
 	got, ok := p.Parse(ev(`panic: nil map assignment`, "s", "e", 1))

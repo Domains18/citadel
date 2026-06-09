@@ -21,6 +21,12 @@ const (
 	// startBacklog is how far back to start polling when there's no cursor.
 	startBacklog = 10 * time.Minute
 	pageLimit    = int32(1000)
+	// ingestLag accounts for CloudWatch Logs' indexing delay. We never query
+	// closer to "now" than this, so the cursor doesn't advance past events
+	// that exist in the log group but aren't yet returned by FilterLogEvents.
+	// Picked conservatively: most CW Logs writes are visible within ~10s, but
+	// agent/SDK retry paths can push tail-end delivery to 30–60s.
+	ingestLag = 1 * time.Minute
 )
 
 // Target identifies a service for the ingest loop.
@@ -168,7 +174,7 @@ func (r *Runner) poll(ctx context.Context, t Target, client AWSLogsClient, parse
 	if !ok {
 		cursor = time.Now().Add(-startBacklog).UnixMilli()
 	}
-	end := time.Now().UnixMilli()
+	end := time.Now().Add(-ingestLag).UnixMilli()
 	if end <= cursor {
 		return nil
 	}

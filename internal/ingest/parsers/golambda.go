@@ -11,12 +11,15 @@ import (
 // GoLambda parses log lines from clusterbox Go-based Lambda functions (smaug).
 // Two shapes are flagged:
 //
-//  1. structured slog lines with level=ERROR
-//  2. APIGW REPORT/END lines carrying a 5xx response status
+//  1. structured slog lines with level=ERROR / FATAL
+//  2. APIGW REPORT lines carrying a 5xx response status
 //
-// AWS Lambda runtime adds a "START RequestId: <uuid> Version: $LATEST" line
-// before every invocation; we capture the most recent requestId seen on the
-// stream to attach as correlation when the actual error line is emitted.
+// The parser is intentionally stateless: a single Parser is shared across
+// services and stream interleaving (events from many streams come back from
+// one FilterLogEvents call) makes "remember the last START line" unsafe.
+// Request-ID correlation therefore comes from the line itself — the requestId
+// field in a slog payload, or the RequestId substring already embedded in the
+// REPORT line we extract.
 type GoLambda struct{}
 
 type slogLine struct {
@@ -32,8 +35,9 @@ type slogLine struct {
 // Gateway both emit access-log style lines containing this).
 var apigwStatusRE = regexp.MustCompile(`(?i)status[:=]\s?(\d{3})`)
 
-// startReqRE pulls the request id off a START line.
-var startReqRE = regexp.MustCompile(`(?i)START\s+RequestId:\s+([A-Za-z0-9-]+)`)
+// requestIDRE pulls a request id from any Lambda boilerplate line
+// (START / END / REPORT all contain "RequestId: <uuid>").
+var requestIDRE = regexp.MustCompile(`(?i)RequestId:\s+([A-Za-z0-9-]+)`)
 
 func (GoLambda) Parse(event cwtypes.FilteredLogEvent) (ErrorEvent, bool) {
 	if event.Message == nil {
@@ -102,7 +106,7 @@ func (GoLambda) Parse(event cwtypes.FilteredLogEvent) (ErrorEvent, bool) {
 }
 
 func extractRequestID(line string) string {
-	if m := startReqRE.FindStringSubmatch(line); m != nil {
+	if m := requestIDRE.FindStringSubmatch(line); m != nil {
 		return m[1]
 	}
 	return ""

@@ -205,13 +205,20 @@ func watchRegistry(ctx context.Context, logger *slog.Logger, db *logsdb.DB, runn
 			if !ok {
 				return
 			}
-			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
+			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) == 0 {
 				continue
 			}
 			if debounce != nil {
 				debounce.Stop()
 			}
 			debounce = time.AfterFunc(500*time.Millisecond, func() {
+				// Editors that save atomically (write tmp + rename) replace
+				// the inode, so the watch silently goes dead. Re-add the
+				// path on every reload to keep observing the new file.
+				_ = w.Remove(path)
+				if err := w.Add(path); err != nil {
+					logger.Warn("re-add registry watch failed", "path", path, "err", err)
+				}
 				if err := reloadRegistry(ctx, logger, db, runner, path); err != nil {
 					logger.Warn("hot reload failed", "err", err)
 				}
