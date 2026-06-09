@@ -1,0 +1,52 @@
+{{define "dashboard.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>citadel · logs</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <strong>citadel</strong>
+    <span class="muted">/ logs</span>
+  </header>
+
+  <main class="layout">
+    <nav class="rail">
+      <h2>services</h2>
+      {{if not .Services}}
+        <p class="muted">no services registered. add one with<br><code>citadel logs-daemon register --env dev</code></p>
+      {{end}}
+      <ul>
+        {{range .Services}}
+        <li>
+          <a href="/logs?service={{.ID}}"{{if eq .ID $.Selected}} class="active"{{end}}>
+            <span class="svc-name">{{.Name}}</span>
+            <span class="svc-env">{{.Env}}</span>
+            <span class="svc-runtime">{{.Runtime}}</span>
+            {{if .ErrorCount}}<span class="badge">{{.ErrorCount}}</span>{{end}}
+          </a>
+        </li>
+        {{end}}
+      </ul>
+    </nav>
+
+    <section class="content">
+      {{if .Selected}}
+        <h1>{{.Selected}}</h1>
+        <p class="muted">errors in the last 7 days · refreshes every 5s</p>
+        <div id="errors"
+             hx-get="/logs/errors?service={{.Selected}}"
+             hx-trigger="load, every 5s"
+             hx-swap="innerHTML">
+          <p class="muted">loading…</p>
+        </div>
+      {{else}}
+        <h1>no service selected</h1>
+        <p class="muted">register a service from a citadel.yml repo to begin observing.</p>
+      {{end}}
+    </section>
+  </main>
+</body>
+</html>{{end}}
